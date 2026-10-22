@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,7 @@ import (
 )
 
 // Version 会显示在网页页脚和 /api/info 里。
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 // errNoStartupHook 表示当前环境没有注入开机自启实现。
 var errNoStartupHook = errors.New("开机自启不可用")
@@ -50,6 +51,15 @@ func NewApp(cfg *Config, port int, ip string) *App {
 	a.clip = NewClipboardWatcher(func(text string) {
 		// 本机复制了新内容 → 推给所有已连接设备
 		a.hub.Publish(Event{Type: "clip", Text: text, From: "pc", FromName: cfg.Name})
+	})
+	a.clip.OnImage(func(pngData []byte) {
+		// 本机复制了图片（截图）→ 落盘成文件再推送，手机端直接显示
+		name := fmt.Sprintf("screenshot-%s.png", time.Now().Format("2006-01-02-150405"))
+		info, err := a.files.Add(bytes.NewReader(pngData), name)
+		if err != nil {
+			return
+		}
+		a.hub.Publish(Event{Type: "image", File: &info, From: "pc", FromName: cfg.Name})
 	})
 	return a
 }

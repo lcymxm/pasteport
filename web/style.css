@@ -300,6 +300,17 @@ textarea::placeholder { color: #3b4754; }
 }
 .item .text.clip-long { max-height: 108px; }
 .item .row-end { display: flex; justify-content: flex-end; gap: 8px; }
+.item .row-end a.mini { text-decoration: none; display: inline-flex; align-items: center; height: 26px; }
+
+.item .shot { display: block; line-height: 0; }
+.item .shot img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: #0a0f14;
+}
 
 .file-item {
   display: flex;

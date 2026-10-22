@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"sync"
@@ -138,10 +140,19 @@ func SetClipboardText(s string) error {
 type ClipboardWatcher struct {
 	onClip func(string)
 
-	mu       sync.Mutex
-	lastSeq  uint32
-	lastText string
-	echo     map[string]struct{} // 我们自己写进去的文本，不要回传
+	mu        sync.Mutex
+	lastSeq   uint32
+	lastText  string
+	lastImage string
+	onImage   func([]byte)
+	echo      map[string]struct{} // 我们自己写进去的文本，不要回传
+}
+
+// OnImage 注册「剪贴板里出现了新图片」的回调，需在 Run 之前调用。
+func (w *ClipboardWatcher) OnImage(fn func([]byte)) {
+	w.mu.Lock()
+	w.onImage = fn
+	w.mu.Unlock()
 }
 
 func NewClipboardWatcher(onClip func(string)) *ClipboardWatcher {
@@ -190,6 +201,8 @@ func (w *ClipboardWatcher) Run(ctx context.Context) {
 		}
 		text, err := GetClipboardText()
 		if err != nil || strings.TrimSpace(text) == "" || len(text) > maxClipBytes {
+			// 不是文字，就看看是不是图片（截图、复制的图像）
+			w.tryImage()
 			continue
 		}
 		w.mu.Lock()
@@ -207,4 +220,29 @@ func (w *ClipboardWatcher) Run(ctx context.Context) {
 		w.mu.Unlock()
 		w.onClip(text)
 	}
+}
+
+// tryImage 读取剪贴板里的位图并回调，同一张图只推一次。
+func (w *ClipboardWatcher) tryImage() {
+	w.mu.Lock()
+	fn := w.onImage
+	w.mu.Unlock()
+	if fn == nil {
+		return
+	}
+	pngData, err := GetClipboardPNG()
+	if err != nil || len(pngData) == 0 {
+		return
+	}
+	sum := sha1.Sum(pngData)
+	key := hex.EncodeToString(sum[:])
+
+	w.mu.Lock()
+	dup := key == w.lastImage
+	w.lastImage = key
+	w.mu.Unlock()
+	if dup {
+		return
+	}
+	fn(pngData)
 }

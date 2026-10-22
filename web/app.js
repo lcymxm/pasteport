@@ -170,6 +170,7 @@
     if (st.history) {
       st.history.slice().reverse().forEach(function (ev) {
         if (ev.type === 'clip') addClip(ev);
+        else if (ev.type === 'image' && ev.file) addImage(ev.file);
         else if (ev.type === 'file' && ev.file) addFile(ev.file, true);
       });
     }
@@ -203,6 +204,9 @@
     if (ev.type === 'clip') {
       addClip(ev);
       if (isPhone && ev.from === 'pc') autoCopy(ev.text);
+    } else if (ev.type === 'image' && ev.file) {
+      addImage(ev.file);
+      toast(isPhone ? '收到一张截图' : '收到图片');
     } else if (ev.type === 'file' && ev.file) {
       addFile(ev.file, false);
       toast('收到文件：' + ev.file.name);
@@ -235,6 +239,40 @@
     li.querySelector('.act-copy').addEventListener('click', async function () {
       var ok = await copy(ev.text);
       toast(ok ? '已复制' : '复制失败，请长按选中文字', !ok);
+    });
+    feed.prepend(li);
+    while (feed.children.length > 40) feed.removeChild(feed.lastElementChild);
+  }
+
+  function addImage(f) {
+    var feed = $('#feed');
+    if (f.id && feed.querySelector('[data-id="' + f.id + '"]')) return;
+    var href = '/api/download?id=' + encodeURIComponent(f.id) + '&t=' + encodeURIComponent(S.token);
+    var li = document.createElement('li');
+    li.className = 'item';
+    if (f.id) li.dataset.id = f.id;
+    li.innerHTML =
+      '<div class="meta"><b>电脑截图</b><span>' + hhmm(f.at) + '</span>' +
+      '<span>· ' + humanSize(f.size) + '</span></div>' +
+      '<a class="shot" href="' + href + '" target="_blank" rel="noreferrer">' +
+      '<img src="' + href + '" alt="截图" loading="lazy"></a>' +
+      '<div class="row-end">' +
+      '<button class="mini act-copy-img">复制</button>' +
+      '<a class="mini" download="' + esc(f.name) + '" href="' + href + '">保存</a>' +
+      '</div>';
+    li.querySelector('.act-copy-img').addEventListener('click', async function () {
+      try {
+        var res = await fetch(href);
+        var blob = await res.blob();
+        if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          toast('图片已复制');
+        } else {
+          toast('这个浏览器不支持复制图片，用「保存」吧', true);
+        }
+      } catch (e) {
+        toast('复制失败，用「保存」吧', true);
+      }
     });
     feed.prepend(li);
     while (feed.children.length > 40) feed.removeChild(feed.lastElementChild);

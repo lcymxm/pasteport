@@ -11,9 +11,10 @@ import (
 
 var errUnsupported = errors.New("当前平台不支持剪贴板读写")
 
-func GetClipboardText() (string, error) { return "", errUnsupported }
-func SetClipboardText(string) error     { return errUnsupported }
-func EnableUTF8Console()                {}
+func GetClipboardText() (string, error)     { return "", errUnsupported }
+func SetClipboardText(string) error         { return errUnsupported }
+func GetClipboardPNG() ([]byte, error)      { return nil, nil }
+func EnableUTF8Console()                    {}
 
 type ClipboardWatcher struct{ onClip func(string) }
 
@@ -23,3 +24,4 @@ func NewClipboardWatcher(onClip func(string)) *ClipboardWatcher {
 
 func (w *ClipboardWatcher) Run(ctx context.Context) { <-ctx.Done() }
 func (w *ClipboardWatcher) SetText(string) error    { return errUnsupported }
+func (w *ClipboardWatcher) OnImage(func([]byte))    {}
