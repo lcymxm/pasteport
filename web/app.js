@@ -181,7 +181,8 @@
       st.files.forEach(function (f) { addFile(f, true); });
     }
     if (st.history) {
-      st.history.slice().reverse().forEach(function (ev) {
+      // 从旧到新依次 prepend，最终新的在上 —— 和实时推送顺序一致
+      st.history.forEach(function (ev) {
         if (ev.type === 'clip') addClip(ev);
         else if (ev.type === 'image' && ev.file) addImage(ev.file);
         else if (ev.type === 'file' && ev.file) addFile(ev.file, true);

@@ -77,6 +77,10 @@ func ensureWritable(dir string) bool {
 	return true
 }
 
+// EnsureDir 确认目录存在且真的能写进去。
+// 有些环境（受限账户、只读目录）创建能成功但写入会失败，所以这里实测一次。
+func EnsureDir(dir string) bool { return ensureWritable(dir) }
+
 // DefaultSaveDir 优先用「下载」目录，否则退回家目录。
 func DefaultSaveDir() string {
 	home, err := os.UserHomeDir()

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -91,6 +92,17 @@ func main() {
 	}
 	if *name != "" {
 		cfg.Name = *name
+	}
+	// 保存目录写不进去时，收到的文件和截图会静默消失。
+	// 与其让用户猜，不如换一个能写的地方并明确告诉他。
+	if !app.EnsureDir(cfg.SaveDir) {
+		fallback := filepath.Join(dir, "files")
+		if app.EnsureDir(fallback) {
+			fmt.Printf("  ⚠ 保存目录 %s 不可写，改用 %s\n", cfg.SaveDir, fallback)
+			cfg.SaveDir = fallback
+		} else {
+			fmt.Printf("  ⚠ 保存目录 %s 不可写，收到的文件可能存不下来\n", cfg.SaveDir)
+		}
 	}
 	if err := cfg.SaveError(); err != nil {
 		fmt.Printf("  ⚠ 配置无法写入 %s：%v（本次运行照常，重启后可能重置）\n", cfg.Dir(), err)

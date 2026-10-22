@@ -76,10 +76,10 @@
 
 
 <p align="center">
-  <img src="docs/screenshot-mobile.png" width="300" alt="手机端">
+  <img src="docs/demo.gif" width="360" alt="手机端实录：电脑上复制，手机上一条条出现">
 </p>
 
-<p align="center"><sub>手机端就长这样 —— 浏览器打开，不装任何东西；装了 APK 会多出原生剪贴板和分享菜单</sub></p>
+<p align="center"><sub>手机端实录 —— 电脑上复制文字、截图，这边一条条出现。浏览器打开就行，不装任何东西</sub></p>
 
 ## 这玩意儿解决什么
 
