@@ -1,24 +1,48 @@
 <div align="center">
 
-<img src="docs/icon.png" width="104" alt="PastePort">
+<img src="docs/icon.png" width="88" alt="PastePort">
 
 # PastePort · 剪贴桥
 
 **电脑上 `Ctrl+C`，手机上 `Ctrl+V`。**
 
-局域网直连 · 不经过任何服务器 · 手机免安装
+局域网直连 · 不经过任何服务器 · 手机连 App 都不用装
 
-[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)](#)
-[![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#)
-[![License](https://img.shields.io/badge/license-MIT-2dd4bf)](LICENSE)
-[![Telemetry](https://img.shields.io/badge/telemetry-none-2dd4bf)](#安全与隐私)
-[![Dependencies](https://img.shields.io/badge/deps-0-2dd4bf)](#它为什么这么小)
+<p>
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/⬇_下载-Windows_exe-2dd4bf?style=for-the-badge" alt="下载 Windows 版"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/⬇_下载-Android_apk-2dd4bf?style=for-the-badge" alt="下载 Android 版"></a>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white" alt="Android">
+  <img src="https://img.shields.io/badge/依赖-0-2dd4bf" alt="零依赖">
+  <img src="https://img.shields.io/badge/license-MIT-2dd4bf" alt="MIT">
+</p>
 
 </div>
 
-![PastePort](docs/social-preview.png)
+<img src="docs/screenshot-desktop.png" alt="PastePort 电脑端控制台">
 
----
+<p align="center"><sub>电脑上的控制台：手机扫码就连上，下面是两台设备之间的全部往来 —— 文字、截图、文件</sub></p>
+
+## 30 秒上手
+
+| 步骤 | 做什么 |
+|---|---|
+| 1 | 下载 [`PastePort.exe`](../../releases/latest)，双击 |
+| 2 | 弹出黑窗口，上面是二维码 —— **不用管它，浏览器已经自动打开控制台** |
+| 3 | 手机相机扫控制台上的二维码（或者手输窗口里的地址） |
+| 4 | 手机上直接就能用了 —— **不用装 App、不用注册、不用登录** |
+| 5 | 现在在电脑上复制任何文字，手机上点一下就能粘贴 |
+
+> 扫不出来？看下面的[「扫不出来 / 扫了打不开？」](#扫不出来--扫了打不开)。最省事的办法是**右键托盘图标 →「显示二维码」**，扫那张图。
+
+<p align="center">
+  <img src="docs/screenshot-mobile.png" width="300" alt="手机端">
+</p>
+
+<p align="center"><sub>手机端就长这样 —— 浏览器打开，不装任何东西；装了 APK 会多出原生剪贴板和分享菜单</sub></p>
 
 ## 这玩意儿解决什么
 
@@ -31,20 +55,6 @@
 为了传 20 个字，你要经过一整个云服务。
 
 PastePort 把这件事变成：**电脑上复制，手机上直接粘贴。** 中间没有任何服务器，两个设备就在同一个 Wi-Fi 里。
-
-## 30 秒上手
-
-| 步骤 | 做什么 |
-|---|---|
-| 1 | 下载 [`PastePort.exe`](../../releases/latest)，双击 |
-| 2 | 弹出黑窗口，上面是二维码 —— **不用管它，浏览器已经自动打开控制台** |
-| 3 | 手机相机扫那个二维码（或者手输窗口里的地址） |
-| 4 | 手机上直接就能用了 —— **不用装 App、不用注册、不用登录** |
-| 5 | 现在在电脑上复制任何文字，手机上点一下就能粘贴 |
-
-> 扫不出来？看下面的[「扫不出来 / 扫了打不开？」](#扫不出来--扫了打不开)。最省事的办法是**右键托盘图标 →「显示二维码」**，扫那张图。
-
-> 手机想更顺手？装 [`PastePort.apk`](../../releases/latest)，多出自动发现、原生剪贴板和系统分享菜单。
 
 <details>
 <summary>双击之后，控制台长这样</summary>
