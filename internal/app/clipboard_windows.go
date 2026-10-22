@@ -30,8 +30,19 @@ var (
 	procGlobalUnlock = kernel32.NewProc("GlobalUnlock")
 	procGlobalSize   = kernel32.NewProc("GlobalSize")
 	procGlobalFree   = kernel32.NewProc("GlobalFree")
+
 	procSetConsoleOutputCP = kernel32.NewProc("SetConsoleOutputCP")
+	procGetConsoleWindow   = kernel32.NewProc("GetConsoleWindow")
+	procShowWindow         = user32.NewProc("ShowWindow")
 )
+
+// HideConsoleWindow 把控制台窗口藏起来（--tray 用），进程继续在托盘里跑。
+func HideConsoleWindow() {
+	h, _, _ := procGetConsoleWindow.Call()
+	if h != 0 {
+		procShowWindow.Call(h, 0) // SW_HIDE
+	}
+}
 
 const (
 	cfUnicodeText = 13

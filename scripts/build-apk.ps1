@@ -11,8 +11,8 @@ param(
     [string]$JdkHome = $env:JAVA_HOME,
     [string]$OutDir = "",
     [string]$OutName = "PastePort.apk",
-    [string]$VersionName = "0.1.0",
-    [int]$VersionCode = 1,
+    [string]$VersionName = "",
+    [int]$VersionCode = 0,
     [int]$MinSdk = 24,
     [int]$TargetSdk = 34,
     [string]$BuildTools = "36.0.0",
@@ -24,6 +24,22 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $AndroidDir = Join-Path $RepoRoot "android"
 if (-not $OutDir) { $OutDir = Join-Path $RepoRoot "dist" }
 $OutDir = [System.IO.Path]::GetFullPath($OutDir)
+
+# 版本号以 AndroidManifest.xml 为唯一来源，调用时传参可以覆盖
+$manifestPath = Join-Path $AndroidDir "AndroidManifest.xml"
+if (-not $VersionName -or $VersionCode -le 0) {
+    $mf = [System.IO.File]::ReadAllText($manifestPath)
+    if (-not $VersionName) {
+        $m = [regex]::Match($mf, 'android:versionName="([^"]+)"')
+        if ($m.Success) { $VersionName = $m.Groups[1].Value }
+    }
+    if ($VersionCode -le 0) {
+        $m = [regex]::Match($mf, 'android:versionCode="(\d+)"')
+        if ($m.Success) { $VersionCode = [int]$m.Groups[1].Value }
+    }
+}
+if (-not $VersionName) { $VersionName = "0.1.0" }
+if ($VersionCode -le 0) { $VersionCode = 1 }
 
 function Fail($msg) { Write-Host "  x $msg" -ForegroundColor Red; exit 1 }
 function Step($msg) { Write-Host "  > $msg" -ForegroundColor Cyan }
@@ -78,7 +94,7 @@ if ($LASTEXITCODE -ne 0) { Fail "aapt2 compile 失败" }
 Step "aapt2 link (清单 + 资源表)"
 & $aapt2 link -o (Join-Path $build "base.apk") `
     -I $androidJar `
-    --manifest (Join-Path $AndroidDir "AndroidManifest.xml") `
+    --manifest $manifestPath `
     -R (Join-Path $build "res.zip") `
     --java (Join-Path $build "gen") `
     --auto-add-overlay `

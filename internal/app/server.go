@@ -3,6 +3,7 @@ package app
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,7 +18,10 @@ import (
 )
 
 // Version 会显示在网页页脚和 /api/info 里。
-const Version = "0.1.0"
+const Version = "0.2.0"
+
+// errNoStartupHook 表示当前环境没有注入开机自启实现。
+var errNoStartupHook = errors.New("开机自启不可用")
 
 // App 把所有部件串起来：配置、广播中心、文件库、剪贴板。
 type App struct {
@@ -26,6 +30,10 @@ type App struct {
 	files *FileStore
 	clip  *ClipboardWatcher
 	url   string
+
+	trayOn     bool
+	startupGet func() bool
+	startupSet func(bool) error
 
 	pairMu    sync.Mutex
 	pairFails int
@@ -48,6 +56,40 @@ func NewApp(cfg *Config, port int, ip string) *App {
 
 // SetClipboard 供外部（如文件拖放）复用同一个剪贴板实例。
 func (a *App) Clipboard() *ClipboardWatcher { return a.clip }
+
+// SetTray 记录托盘是否真的起来了，界面上要显示这个状态。
+func (a *App) SetTray(on bool) { a.trayOn = on }
+
+// SetStartupHooks 由 main 注入开机自启的读写实现。
+func (a *App) SetStartupHooks(get func() bool, set func(bool) error) {
+	a.startupGet = get
+	a.startupSet = set
+}
+
+// StartupEnabled 返回当前开机自启状态；没注入实现时恒为 false。
+func (a *App) StartupEnabled() bool {
+	if a.startupGet == nil {
+		return false
+	}
+	return a.startupGet()
+}
+
+// SetStartup 切换开机自启。
+func (a *App) SetStartup(on bool) error {
+	if a.startupSet == nil {
+		return errNoStartupHook
+	}
+	return a.startupSet(on)
+}
+
+// ToggleStartup 翻转开机自启，返回切换后的状态。
+func (a *App) ToggleStartup() (bool, error) {
+	next := !a.StartupEnabled()
+	if err := a.SetStartup(next); err != nil {
+		return a.StartupEnabled(), err
+	}
+	return next, nil
+}
 
 func (a *App) Hub() *Hub { return a.hub }
 
@@ -72,6 +114,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/local", a.handleLocalToken)
 	mux.HandleFunc("/api/pair", a.handlePair)
 	mux.HandleFunc("/api/state", a.mustAuth(a.handleState))
+	mux.HandleFunc("/api/settings", a.mustAuth(a.handleSettings))
 	mux.HandleFunc("/api/events", a.mustAuth(a.handleEvents))
 	mux.HandleFunc("/api/clip", a.mustAuth(a.handleClip))
 	mux.HandleFunc("/api/upload", a.mustAuth(a.handleUpload))
@@ -221,6 +264,8 @@ type stateResp struct {
 	Files    []FileInfo `json:"files"`
 	SaveDir  string     `json:"save_dir"`
 	Platform string     `json:"platform"`
+	Tray     bool       `json:"tray"`
+	Startup  bool       `json:"startup"`
 }
 
 func (a *App) handleState(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +279,36 @@ func (a *App) handleState(w http.ResponseWriter, r *http.Request) {
 		Files:    a.files.List(),
 		SaveDir:  a.cfg.SaveDir,
 		Platform: "windows",
+		Tray:     a.trayOn,
+		Startup:  a.StartupEnabled(),
+	})
+}
+
+type settingsReq struct {
+	Startup *bool `json:"startup"`
+}
+
+// handleSettings 目前只处理开机自启，给网页控制台的那个开关用。
+func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "请用 POST")
+		return
+	}
+	var req settingsReq
+	if err := json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求格式不正确")
+		return
+	}
+	if req.Startup != nil {
+		if err := a.SetStartup(*req.Startup); err != nil {
+			writeErr(w, http.StatusInternalServerError, "设置失败："+err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"startup": a.StartupEnabled(),
+		"tray":    a.trayOn,
 	})
 }
 

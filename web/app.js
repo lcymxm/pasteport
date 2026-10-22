@@ -157,6 +157,7 @@
     $('#qr').src = '/api/qr?t=' + encodeURIComponent(S.token);
     $('#deviceLine').textContent = '保存到 ' + (st.save_dir || '');
     $('#hint').textContent = isPhone ? '点右侧发送' : 'Ctrl + Enter';
+    $('#startup').checked = !!st.startup;
 
     // 告诉 APK 记住地址和令牌：分享菜单和下次启动都要用（浏览器里没有这个对象）
     if (window.PastePort && typeof window.PastePort.remember === 'function') {
@@ -324,6 +325,23 @@
   $('#btnClear').addEventListener('click', function () {
     $('#feed').innerHTML = '';
     updateEmpties();
+  });
+
+  $('#startup').addEventListener('change', async function () {
+    var box = this;
+    var want = box.checked;
+    try {
+      var r = await api('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startup: want })
+      });
+      box.checked = !!r.startup;
+      toast(r.startup ? '已加入开机自启' : '已取消开机自启');
+    } catch (e) {
+      box.checked = !want;
+      toast(e.message === 'unauthorized' ? '连接已失效' : '设置失败：' + e.message, true);
+    }
   });
 
   // 拖拽发送（桌面端）

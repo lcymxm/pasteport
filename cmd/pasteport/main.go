@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"pasteport/internal/app"
+	"pasteport/internal/icon"
+	"pasteport/internal/tray"
 )
 
 // buildArch 由构建脚本通过 -ldflags "-X main.buildArch=..." 写入。
@@ -21,12 +23,16 @@ var buildArch = runtime.GOARCH
 
 func main() {
 	var (
-		port    = flag.Int("port", 0, "监听端口（默认读取配置，8787）")
-		save    = flag.String("save", "", "接收文件的保存目录")
-		name    = flag.String("name", "", "本机在手机上显示的名字")
-		dataDir = flag.String("data", "", "配置目录（默认自动选择可写位置）")
-		noOpen  = flag.Bool("no-open", false, "不要自动打开浏览器")
-		showVer = flag.Bool("version", false, "只打印版本号")
+		port             = flag.Int("port", 0, "监听端口（默认读取配置，8787）")
+		save             = flag.String("save", "", "接收文件的保存目录")
+		name             = flag.String("name", "", "本机在手机上显示的名字")
+		dataDir          = flag.String("data", "", "配置目录（默认自动选择可写位置）")
+		noOpen           = flag.Bool("no-open", false, "不要自动打开浏览器")
+		noTray           = flag.Bool("no-tray", false, "不显示托盘图标")
+		trayMode         = flag.Bool("tray", false, "静默启动：隐藏控制台，只留在托盘里")
+		installStartup   = flag.Bool("install-startup", false, "加入开机自启后退出")
+		uninstallStartup = flag.Bool("uninstall-startup", false, "取消开机自启后退出")
+		showVer          = flag.Bool("version", false, "只打印版本号")
 	)
 	flag.Parse()
 
@@ -37,6 +43,21 @@ func main() {
 
 	app.EnableUTF8Console()
 
+	if *installStartup {
+		if err := app.SetStartup(true); err != nil {
+			fatal(err)
+		}
+		fmt.Println("  已加入开机自启：", app.StartupCommand())
+		return
+	}
+	if *uninstallStartup {
+		if err := app.SetStartup(false); err != nil {
+			fatal(err)
+		}
+		fmt.Println("  已取消开机自启")
+		return
+	}
+
 	if *dataDir != "" {
 		app.SetDataDir(*dataDir)
 	}
@@ -44,6 +65,19 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+
+	// 单实例：第二次双击不应该再占一个端口，而是把已有窗口叫出来
+	if already, err := app.AcquireSingle(app.InstanceTag(dir)); err == nil && already {
+		if !*noOpen {
+			if rt, ok := app.ReadRuntime(dir); ok && reachable(rt.Port) {
+				openBrowser(fmt.Sprintf("http://127.0.0.1:%d/", rt.Port))
+			}
+		}
+		fmt.Println("  PastePort 已经在运行了，不用再开一个。")
+		return
+	}
+	defer app.ReleaseSingle()
+
 	cfg, err := app.LoadConfig(dir)
 	if err != nil {
 		fatal(err)
@@ -68,10 +102,59 @@ func main() {
 
 	ip := app.LocalIPv4()
 	a := app.NewApp(cfg, actualPort, ip)
+	a.SetStartupHooks(app.StartupEnabled, app.SetStartup)
 
-	banner(cfg, actualPort)
+	consoleURL := fmt.Sprintf("http://127.0.0.1:%d/", actualPort)
+	_ = app.WriteRuntime(dir, app.RuntimeInfo{
+		PID:     os.Getpid(),
+		Port:    actualPort,
+		URL:     fmt.Sprintf("http://%s:%d/", ip, actualPort),
+		Version: app.Version,
+	})
+	defer app.ClearRuntime(dir)
+
+	quit := make(chan struct{})
+	var once bool
+
+	if !*trayMode {
+		banner(cfg, actualPort)
+	}
 	if !*noOpen {
-		openBrowser(fmt.Sprintf("http://127.0.0.1:%d/", actualPort))
+		openBrowser(consoleURL)
+	}
+
+	// 托盘：把窗口关掉也能继续跑
+	var tr *tray.Tray
+	if !*noTray {
+		tr, err = tray.Register(icon.PNG, "PastePort · "+cfg.Name, dir, tray.Actions{
+			OpenConsole: func() {
+				openBrowser(consoleURL)
+			},
+			CopyPairCode: func() {
+				if err := a.Clipboard().SetText(app.SpacedCode(cfg.Code)); err == nil {
+					tr.Notify("配对码已复制", app.SpacedCode(cfg.Code))
+				}
+			},
+			StartupEnabled: a.StartupEnabled,
+			ToggleStartup:  a.ToggleStartup,
+			Quit: func() {
+				if !once {
+					once = true
+					close(quit)
+				}
+			},
+		})
+		if err != nil {
+			fmt.Printf("  ⚠ 托盘图标没能起来（不影响使用）：%v\n", err)
+		} else {
+			a.SetTray(true)
+			tr.Notify("PastePort 已就绪", "电脑复制的内容会自动推到手机")
+		}
+	}
+	defer tr.Dispose()
+
+	if *trayMode {
+		app.HideConsoleWindow()
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -86,14 +169,17 @@ func main() {
 		Handler:           a.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			fatal(err)
 		}
 	}()
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-quit:
+	}
+
 	fmt.Println("\n  正在退出…")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -129,7 +215,7 @@ func banner(cfg *app.Config, port int) {
 		fmt.Println("  " + line)
 	}
 	fmt.Println()
-	fmt.Println("  也可以手动输入上面的地址和配对码。按 Ctrl+C 退出。")
+	fmt.Println("  配对码和地址也从托盘图标的右键菜单里复制。关掉这个窗口不影响使用。")
 	fmt.Println()
 }
 
@@ -158,6 +244,17 @@ func openBrowser(url string) {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	_ = cmd.Start()
+}
+
+// reachable 用来验证 runtime.json 里的端口是不是真的有人听，
+// 避免上次被强杀留下的陈旧记录把浏览器带到一个死地址。
+func reachable(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 400*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
 func fatal(err error) {

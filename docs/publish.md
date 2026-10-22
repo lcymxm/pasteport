@@ -80,6 +80,7 @@ git push
 git tag v0.1.1 && git push origin v0.1.1
 ```
 
-版本号写在三处，一起改：`android/AndroidManifest.xml` 的 `versionName`/`versionCode`、
-`.github/workflows/build.yml` 里传的 `-VersionName`/`-VersionCode`（如果显式传了的话），
-以及 `internal/app/server.go` 里的 `Version` 常量。
+版本号只有两处来源：
+
+- `internal/app/server.go` 里的 `Version` 常量（显示在网页页脚和 `/api/info`）
+- `android/AndroidManifest.xml` 里的 `versionName` / `versionCode`（`build-apk.ps1` 直接从这里读，不用另改脚本）
