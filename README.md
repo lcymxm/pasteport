@@ -107,7 +107,7 @@ PastePort 把这件事变成：**电脑上复制，手机上直接粘贴。** �
 | 🎛 **托盘常驻** | 关掉黑窗口也不影响使用；右键菜单能打开控制台、复制配对码、开关开机自启、退出 |
 | 🚀 **开机自启** | 登录 Windows 自动在托盘里启动，只写 `HKCU`，不需要管理员权限 |
 | 1️⃣ **单实例** | 重复双击只会把已经开着的控制台叫出来，不会多占一个端口 |
-| 🪶 **单文件** | Windows 端就是一个 **7 MB** 的 exe，Android 端就是一个 **49 KB** 的 apk —— 没有安装器、没有运行库、没有 node_modules |
+| 🪶 **单文件** | Windows 端就是一个 **7 MB** 的 exe，Android 端就是一个 **53 KB** 的 apk —— 没有安装器、没有运行库、没有 node_modules |
 
 ### APK 比网页多什么
 
@@ -280,7 +280,7 @@ Issue 和 PR 都欢迎。改前端只需要重新 `go build`，前端是 `embed`
 **PastePort** is a tiny cross-device clipboard and file bridge for Windows and Android. Copy on your PC, paste on your phone — over your local network, with no cloud, no account, and no telemetry.
 
 - **Windows**: a single ~7 MB `.exe`, no installer, no runtime, no dependencies.
-- **Android**: works instantly in the mobile browser by scanning a QR code — no app required. The optional 49 KB APK adds native clipboard access, LAN auto-discovery, and a share-menu target.
+- **Android**: works instantly in the mobile browser by scanning a QR code — no app required. The optional 53 KB APK adds native clipboard access, LAN auto-discovery, and a share-menu target.
 - **How**: a Go HTTP server with SSE push, an embedded vanilla-JS UI, and a Win32 clipboard watcher.
 
 Download the [latest release](../../releases/latest) or [build from source](#从源码构建).

@@ -104,14 +104,14 @@ def build_social(icon):
     d.text((100, 410), "电脑复制，手机粘贴 · 局域网直连", font=sub, fill=(150, 168, 180))
 
     x = 100
-    for text in ["免安装", "无账号", "不过云", "exe 7 MB", "apk 49 KB"]:
+    for text in ["免安装", "无账号", "不过云", "exe 7 MB", "apk 53 KB"]:
         tw = d.textlength(text, font=chip_font)
         d.rounded_rectangle([x, 480, x + tw + 34, 532], radius=26,
                             fill=(18, 30, 36), outline=(35, 60, 62))
         d.text((x + 17, 493), text, font=chip_font, fill=(94, 234, 212))
         x += tw + 50
 
-    d.text((96, 574), "github.com/<you>/pasteport", font=mono, fill=(90, 106, 118))
+    d.text((96, 574), "github.com/lcymxm/pasteport", font=mono, fill=(90, 106, 118))
     path = os.path.join(ROOT, "docs", "social-preview.png")
     canvas.save(path, optimize=True)
     print("  docs/social-preview.png                              1280x640")
