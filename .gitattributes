@@ -1,0 +1,9 @@
+# 统一用 LF（PowerShell 和 Go 都无压力），避免 Windows 上提交出满屏的换行变更
+* text=auto eol=lf
+
+*.png      binary
+*.jpg      binary
+*.ico      binary
+*.apk      binary
+*.exe      binary
+*.keystore binary

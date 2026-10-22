@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0f">
+<meta name="color-scheme" content="dark">
+<title>PastePort · 剪贴桥</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1318'/%3E%3Cpath d='M9 13h11l-3-3M23 19H12l3 3' stroke='%232dd4bf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="0.5" y="0.5" width="31" height="31" rx="8.5" fill="url(#g)" stroke="#1f2b36"/>
+        <path d="M9 13h11l-3.2-3.2M23 19H12l3.2 3.2" fill="none" stroke="#06231f" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#22a3c4"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span class="name">PastePort</span>
+      <span class="cn">剪贴桥</span>
+    </div>
+    <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
+  </header>
+
+  <!-- 未配对：输入配对码 -->
+  <section class="card pair hidden" id="pairView">
+    <h1>连接这台电脑</h1>
+    <p class="muted">输入电脑屏幕上显示的 6 位配对码，只需一次。</p>
+    <input id="code" class="code-input" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code"
+           maxlength="6" placeholder="000000" aria-label="配对码">
+    <button class="btn primary wide" id="btnPair">连接</button>
+    <p class="err" id="pairErr"></p>
+  </section>
+
+  <!-- 已配对 -->
+  <div id="mainView" class="hidden">
+
+    <section class="card duo" id="qrCard">
+      <div class="qr-wrap"><img id="qr" alt="扫码连接" width="188" height="188"></div>
+      <div class="qr-info">
+        <h2>用手机扫码</h2>
+        <p class="muted">相机扫一下就能用，不需要装 App</p>
+        <div class="code-big" id="codeBig">—</div>
+        <div class="url-line">
+          <code id="urlText">http://…</code>
+          <button class="mini" id="btnCopyUrl" title="复制地址">复制</button>
+        </div>
+        <p class="tiny" id="deviceLine">等待手机连接…</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row-between">
+        <h2>发送文字</h2>
+        <span class="hint" id="hint">Ctrl + Enter</span>
+      </div>
+      <textarea id="text" rows="3" placeholder="输入或粘贴文字，发到另一台设备…"></textarea>
+      <div class="actions">
+        <button class="btn primary" id="btnSend">发送</button>
+        <label class="btn ghost" for="file">发送文件</label>
+        <input type="file" id="file" multiple hidden>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row-between">
+        <h2>最近</h2>
+        <button class="mini" id="btnClear">清空</button>
+      </div>
+      <ul class="feed" id="feed"></ul>
+      <p class="empty" id="feedEmpty">还没有内容。在电脑上复制一段文字试试。</p>
+    </section>
+
+    <section class="card">
+      <h2>收到的文件</h2>
+      <ul class="files" id="files"></ul>
+      <p class="empty" id="filesEmpty">还没有文件。</p>
+    </section>
+
+  </div>
+
+  <footer>
+    <span>PastePort v<span id="ver">0.1.0</span></span>
+    <span class="sep">·</span>
+    <span>局域网直连，不经过任何服务器</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="dropzone" id="dropzone"><span>松开，把文件发过去</span></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

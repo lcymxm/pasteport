@@ -1,0 +1,26 @@
+# 构建产物
+/dist/
+/build/
+*.exe
+*.apk
+*.aab
+
+# 本地工具链（scripts/setup-* 会生成）
+/_tools/
+/_dl/
+
+# Go
+*.test
+*.out
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.user
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 调试残留
+*.log
+PastePort-data/

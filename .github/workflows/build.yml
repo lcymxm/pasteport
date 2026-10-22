@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建 exe + apk
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          cache: true
+
+      - name: 安装 JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      - name: 准备 Android 构建工具
+        shell: pwsh
+        run: ./scripts/setup-android-sdk.ps1 -Sdk "$env:ANDROID_SDK_ROOT"
+
+      - name: 构建 Windows exe
+        shell: pwsh
+        run: ./scripts/build-exe.ps1 -Arch amd64
+
+      - name: 构建 Android apk
+        shell: pwsh
+        run: |
+          $extra = @{}
+          if ($env:KEYSTORE_B64) {
+            $path = Join-Path $PWD "build/ci.keystore"
+            New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
+            [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:KEYSTORE_B64))
+            $extra["KeystorePath"] = $path
+          }
+          ./scripts/build-apk.ps1 -Sdk "$env:ANDROID_SDK_ROOT" -JdkHome "$env:JAVA_HOME" @extra
+        env:
+          # 可选：把这个仓库自己签名的 keystore 以 base64 存进 Actions Secret，
+          # 这样每次发版签名一致，用户可以直接覆盖升级。
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: 校验产物
+        shell: pwsh
+        run: |
+          Get-ChildItem dist | Format-Table Name, Length
+          if (-not (Test-Path "dist/PastePort.exe")) { throw "缺少 PastePort.exe" }
+          if (-not (Test-Path "dist/PastePort.apk")) { throw "缺少 PastePort.apk" }
+
+      - name: 上传 exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: PastePort-windows-x64
+          path: dist/PastePort.exe
+
+      - name: 上传 apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: PastePort-android
+          path: dist/PastePort.apk
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag dist/PastePort.exe dist/PastePort.apk `
+            --title "PastePort $tag" `
+            --generate-notes
