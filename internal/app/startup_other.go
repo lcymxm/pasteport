@@ -8,8 +8,8 @@ import "errors"
 
 var errNoStartup = errors.New("当前平台不支持开机自启")
 
-func StartupEnabled() bool                     { return false }
-func SetStartup(bool) error                    { return errNoStartup }
-func ToggleStartup() (bool, error)             { return false, errNoStartup }
-func StartupCommand() string                   { return "" }
-func HideConsoleWindow()                       {}
+func StartupEnabled() bool         { return false }
+func SetStartup(bool) error        { return errNoStartup }
+func ToggleStartup() (bool, error) { return false, errNoStartup }
+func StartupCommand() string       { return "" }
+func HideConsoleWindow()           {}

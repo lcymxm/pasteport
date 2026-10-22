@@ -44,7 +44,7 @@
   <div id="mainView" class="hidden">
 
     <section class="card duo" id="qrCard">
-      <div class="qr-wrap"><img id="qr" alt="扫码连接" width="188" height="188"></div>
+      <div class="qr-wrap"><img id="qr" alt="扫码连接"></div>
       <div class="qr-info">
         <h2>用手机扫码</h2>
         <p class="muted">相机扫一下就能用，不需要装 App</p>
@@ -53,6 +53,7 @@
           <code id="urlText">http://…</code>
           <button class="mini" id="btnCopyUrl" title="复制地址">复制</button>
         </div>
+        <select id="ipSelect" class="ip-select hidden" aria-label="选择电脑地址"></select>
         <p class="tiny" id="deviceLine">等待手机连接…</p>
         <label class="toggle" title="登录 Windows 后自动在托盘里启动">
           <input type="checkbox" id="startup">

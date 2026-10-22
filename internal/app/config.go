@@ -20,8 +20,8 @@ type Config struct {
 	Token   string `json:"token"`    // 长期令牌（手机保存它，之后免配对）
 	SaveDir string `json:"save_dir"` // 收到的文件保存目录
 
-	dir    string // 数据目录（不写进 json）
-	saved  bool   // 是否成功落盘
+	dir     string // 数据目录（不写进 json）
+	saved   bool   // 是否成功落盘
 	saveErr error
 }
 

@@ -7,6 +7,7 @@ import "errors"
 
 type Actions struct {
 	OpenConsole    func()
+	ShowQR         func()
 	CopyPairCode   func()
 	StartupEnabled func() bool
 	ToggleStartup  func() (bool, error)

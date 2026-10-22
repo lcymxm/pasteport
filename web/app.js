@@ -13,6 +13,7 @@
     cid: 'c' + Math.random().toString(36).slice(2, 8),
     name: isPhone ? '手机' : '电脑',
     url: '',
+    urls: [],
     es: null,
     seen: Object.create(null),
     got: 0
@@ -149,13 +150,25 @@
       return;
     }
     S.url = st.url || '';
+    S.urls = st.urls && st.urls.length ? st.urls : [S.url];
     $('#pairView').classList.add('hidden');
     $('#mainView').classList.remove('hidden');
     $('#ver').textContent = st.version || '';
     $('#codeBig').textContent = spaced(st.code);
-    $('#urlText').textContent = st.url || location.origin;
-    $('#qr').src = '/api/qr?t=' + encodeURIComponent(S.token);
-    $('#deviceLine').textContent = '保存到 ' + (st.save_dir || '');
+
+    var sel = $('#ipSelect');
+    if (S.urls.length > 1) {
+      sel.innerHTML = S.urls.map(function (u, i) {
+        return '<option value="' + i + '">' + esc(u) + '</option>';
+      }).join('');
+      sel.classList.remove('hidden');
+      sel.value = '0';
+      $('#deviceLine').textContent = '有多个网卡，扫不出来就换一个地址试试';
+    } else {
+      sel.classList.add('hidden');
+      $('#deviceLine').textContent = '保存到 ' + (st.save_dir || '');
+    }
+    applyQR(0);
     $('#hint').textContent = isPhone ? '点右侧发送' : 'Ctrl + Enter';
     $('#startup').checked = !!st.startup;
 
@@ -221,6 +234,14 @@
   }
 
   /* ---------------- 渲染 ---------------- */
+
+  // 换一个网卡地址：二维码和显示的文字一起切
+  function applyQR(idx) {
+    if (!S.urls || !S.urls.length) { S.urls = [S.url || location.origin]; }
+    if (!(idx >= 0 && idx < S.urls.length)) { idx = 0; }
+    $('#qr').src = '/api/qr?t=' + encodeURIComponent(S.token) + '&i=' + idx;
+    $('#urlText').textContent = S.urls[idx];
+  }
 
   function addClip(ev) {
     var feed = $('#feed');
@@ -365,10 +386,13 @@
     updateEmpties();
   });
 
+  $('#ipSelect').addEventListener('change', function () {
+    applyQR(parseInt(this.value, 10) || 0);
+  });
+
   $('#startup').addEventListener('change', async function () {
     var box = this;
-    var want = box.checked;
-    try {
+    var want = box.checked;    try {
       var r = await api('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

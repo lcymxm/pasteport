@@ -30,6 +30,7 @@ func main() {
 		noOpen           = flag.Bool("no-open", false, "不要自动打开浏览器")
 		noTray           = flag.Bool("no-tray", false, "不显示托盘图标")
 		trayMode         = flag.Bool("tray", false, "静默启动：隐藏控制台，只留在托盘里")
+		showQR           = flag.Bool("show-qr", false, "启动后用看图器打开二维码图片")
 		installStartup   = flag.Bool("install-startup", false, "加入开机自启后退出")
 		uninstallStartup = flag.Bool("uninstall-startup", false, "取消开机自启后退出")
 		showVer          = flag.Bool("version", false, "只打印版本号")
@@ -70,7 +71,7 @@ func main() {
 	if already, err := app.AcquireSingle(app.InstanceTag(dir)); err == nil && already {
 		if !*noOpen {
 			if rt, ok := app.ReadRuntime(dir); ok && reachable(rt.Port) {
-				openBrowser(fmt.Sprintf("http://127.0.0.1:%d/", rt.Port))
+				shellOpen(fmt.Sprintf("http://127.0.0.1:%d/", rt.Port))
 			}
 		}
 		fmt.Println("  PastePort 已经在运行了，不用再开一个。")
@@ -100,27 +101,38 @@ func main() {
 		fatal(err)
 	}
 
-	ip := app.LocalIPv4()
-	a := app.NewApp(cfg, actualPort, ip)
+	ips := app.LanIPs()
+	primary := "127.0.0.1"
+	if len(ips) > 0 {
+		primary = ips[0]
+	}
+	a := app.NewApp(cfg, actualPort, ips)
 	a.SetStartupHooks(app.StartupEnabled, app.SetStartup)
 
 	consoleURL := fmt.Sprintf("http://127.0.0.1:%d/", actualPort)
+	lanURL := fmt.Sprintf("http://%s:%d/", primary, actualPort)
 	_ = app.WriteRuntime(dir, app.RuntimeInfo{
 		PID:     os.Getpid(),
 		Port:    actualPort,
-		URL:     fmt.Sprintf("http://%s:%d/", ip, actualPort),
+		URL:     lanURL,
 		Version: app.Version,
 	})
 	defer app.ClearRuntime(dir)
+
+	// 二维码另存一份 PNG：终端字体/配色不可靠时，这个才是能扫的那个
+	qrPath, qrErr := app.WriteQRFile(dir, lanURL+"#c="+cfg.Code)
 
 	quit := make(chan struct{})
 	var once bool
 
 	if !*trayMode {
-		banner(cfg, actualPort)
+		banner(cfg, actualPort, ips, qrErr)
+	}
+	if *showQR && qrErr == nil {
+		shellOpen(qrPath)
 	}
 	if !*noOpen {
-		openBrowser(consoleURL)
+		shellOpen(consoleURL)
 	}
 
 	// 托盘：把窗口关掉也能继续跑
@@ -128,7 +140,12 @@ func main() {
 	if !*noTray {
 		tr, err = tray.Register(icon.PNG, "PastePort · "+cfg.Name, dir, tray.Actions{
 			OpenConsole: func() {
-				openBrowser(consoleURL)
+				shellOpen(consoleURL)
+			},
+			ShowQR: func() {
+				if qrErr == nil {
+					shellOpen(qrPath)
+				}
 			},
 			CopyPairCode: func() {
 				if err := a.Clipboard().SetText(app.SpacedCode(cfg.Code)); err == nil {
@@ -200,12 +217,23 @@ func listen(want int) (net.Listener, int, error) {
 	return nil, 0, fmt.Errorf("端口 %d 附近都被占用了，试试 --port 9000", want)
 }
 
-func banner(cfg *app.Config, port int) {
-	url := fmt.Sprintf("http://%s:%d/", app.LocalIPv4(), port)
+func banner(cfg *app.Config, port int, ips []string, qrErr error) {
+	primary := "127.0.0.1"
+	if len(ips) > 0 {
+		primary = ips[0]
+	}
+	url := fmt.Sprintf("http://%s:%d/", primary, port)
+
 	fmt.Printf("\n  PastePort 剪贴桥  v%s\n", app.Version)
 	fmt.Println("  ─────────────────────────────────────────────")
 	fmt.Printf("  电脑     %s\n", cfg.Name)
 	fmt.Printf("  地址     %s\n", url)
+	if len(ips) > 1 {
+		fmt.Println("  其它地址（上面那个打不开就换一个）：")
+		for _, ip := range ips[1:] {
+			fmt.Printf("           http://%s:%d/\n", ip, port)
+		}
+	}
 	fmt.Printf("  配对码   %s\n", app.SpacedCode(cfg.Code))
 	fmt.Printf("  保存到   %s\n", cfg.SaveDir)
 	fmt.Println()
@@ -215,7 +243,12 @@ func banner(cfg *app.Config, port int) {
 		fmt.Println("  " + line)
 	}
 	fmt.Println()
-	fmt.Println("  配对码和地址也从托盘图标的右键菜单里复制。关掉这个窗口不影响使用。")
+	if qrErr == nil {
+		fmt.Println("  扫不出来？在托盘图标上右键 →「显示二维码」，会打开一张大图。")
+	} else {
+		fmt.Println("  ⚠ 二维码图片没能生成，请在浏览器里扫码：" + url)
+	}
+	fmt.Println("  关掉这个窗口不影响使用，程序会留在托盘里。")
 	fmt.Println()
 }
 
@@ -236,11 +269,11 @@ func splitLines(s string) []string {
 	return out
 }
 
-func openBrowser(url string) {
+func shellOpen(target string) {
 	if runtime.GOOS != "windows" {
 		return
 	}
-	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	_ = cmd.Start()

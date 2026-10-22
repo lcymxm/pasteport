@@ -209,7 +209,14 @@ p { margin: 0; line-height: 1.55; }
   line-height: 0;
   box-shadow: 0 8px 24px -14px rgba(0, 0, 0, .9);
 }
-.qr-wrap img { display: block; width: 168px; height: 168px; image-rendering: pixelated; }
+/* 二维码必须按原始像素显示：非整数缩放会让模块宽窄不一，手机经常认不出来 */
+.qr-wrap img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  image-rendering: pixelated;
+}
 .qr-info { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 .code-big {
   font-family: var(--mono);
@@ -233,6 +240,21 @@ p { margin: 0; line-height: 1.55; }
   min-width: 0;
   flex: 1;
 }
+
+.ip-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #0a0f14;
+  border: 1px solid var(--line);
+  color: var(--fg-dim);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: var(--mono);
+  max-width: 100%;
+  cursor: pointer;
+}
+.ip-select:focus { outline: none; border-color: rgba(45, 212, 191, .5); }
 
 /* ---------- 输入 ---------- */
 

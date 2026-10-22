@@ -87,11 +87,13 @@ const (
 	menuCopy    = 1002
 	menuStartup = 1003
 	menuQuit    = 1004
+	menuShowQR  = 1005
 )
 
 // Actions 是托盘菜单触发时回调进主程序的动作。
 type Actions struct {
 	OpenConsole  func()
+	ShowQR       func()
 	CopyPairCode func()
 	// StartupEnabled 返回当前是否已设置开机自启（用来打勾）
 	StartupEnabled func() bool
@@ -219,6 +221,7 @@ func (t *Tray) init() error {
 	hmenu, _, _ := procCreatePopupMenu.Call()
 	t.hmenu = hmenu
 	appendMenu(hmenu, mfString, menuOpen, "打开控制台")
+	appendMenu(hmenu, mfString, menuShowQR, "显示二维码")
 	appendMenu(hmenu, mfString, menuCopy, "复制配对码")
 	appendMenu(hmenu, mfString, menuStartup, "开机自启")
 	appendMenu(hmenu, mfSeparator, 0, "")
@@ -345,6 +348,10 @@ func (t *Tray) showMenu() {
 	case menuOpen:
 		if t.actions.OpenConsole != nil {
 			go t.actions.OpenConsole()
+		}
+	case menuShowQR:
+		if t.actions.ShowQR != nil {
+			go t.actions.ShowQR()
 		}
 	case menuCopy:
 		if t.actions.CopyPairCode != nil {

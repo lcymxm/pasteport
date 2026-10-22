@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,7 @@ import (
 )
 
 // Version 会显示在网页页脚和 /api/info 里。
-const Version = "0.3.0"
+const Version = "0.3.1"
 
 // errNoStartupHook 表示当前环境没有注入开机自启实现。
 var errNoStartupHook = errors.New("开机自启不可用")
@@ -31,6 +32,7 @@ type App struct {
 	files *FileStore
 	clip  *ClipboardWatcher
 	url   string
+	urls  []string
 
 	trayOn     bool
 	startupGet func() bool
@@ -41,12 +43,20 @@ type App struct {
 	pairLock  time.Time
 }
 
-func NewApp(cfg *Config, port int, ip string) *App {
+func NewApp(cfg *Config, port int, ips []string) *App {
+	if len(ips) == 0 {
+		ips = []string{"127.0.0.1"}
+	}
+	urls := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		urls = append(urls, fmtURL(ip, port))
+	}
 	a := &App{
 		cfg:   cfg,
 		hub:   NewHub(),
 		files: NewFileStore(cfg.SaveDir),
-		url:   fmtURL(ip, port),
+		url:   urls[0],
+		urls:  urls,
 	}
 	a.clip = NewClipboardWatcher(func(text string) {
 		// 本机复制了新内容 → 推给所有已连接设备
@@ -268,6 +278,7 @@ type stateResp struct {
 	Name     string     `json:"name"`
 	Version  string     `json:"version"`
 	URL      string     `json:"url"`
+	URLs     []string   `json:"urls"`
 	Code     string     `json:"code"`
 	Devices  int        `json:"devices"`
 	History  []Event    `json:"history"`
@@ -283,6 +294,7 @@ func (a *App) handleState(w http.ResponseWriter, r *http.Request) {
 		Name:     a.cfg.Name,
 		Version:  Version,
 		URL:      a.url,
+		URLs:     a.urls,
 		Code:     a.cfg.Code,
 		Devices:  a.hub.Clients(),
 		History:  a.hub.History(),
@@ -488,7 +500,16 @@ func (a *App) handleDownload(w http.ResponseWriter, r *http.Request) {
 // ---------- 二维码 ----------
 
 func (a *App) handleQR(w http.ResponseWriter, r *http.Request) {
-	target := a.url + "#c=" + a.cfg.Code
+	idx := 0
+	if s := r.URL.Query().Get("i"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			idx = n
+		}
+	}
+	if idx < 0 || idx >= len(a.urls) {
+		idx = 0
+	}
+	target := a.urls[idx] + "#c=" + a.cfg.Code
 	png := QRPNG(target)
 	if png == nil {
 		writeErr(w, http.StatusInternalServerError, "二维码生成失败")
