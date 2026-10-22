@@ -13,7 +13,7 @@ param(
     [string]$Branch = "main"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"  # git 会往 stderr 写东西，靠 $LASTEXITCODE 判断成败
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
 function Fail($msg) { Write-Host "  x $msg" -ForegroundColor Red; exit 1 }
@@ -33,8 +33,8 @@ try {
     }
 
     $url = "https://github.com/$Repo.git"
-    $existing = git remote get-url origin 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $existing = git config --get remote.origin.url
+    if ($LASTEXITCODE -eq 0 -and $existing) {
         if ($existing -ne $url) {
             Step "更新 remote: $url"
             git remote set-url origin $url
