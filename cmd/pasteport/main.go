@@ -120,7 +120,7 @@ func main() {
 	defer app.ClearRuntime(dir)
 
 	// 二维码另存一份 PNG：终端字体/配色不可靠时，这个才是能扫的那个
-	qrPath, qrErr := app.WriteQRFile(dir, lanURL+"#c="+cfg.Code)
+	qrPath, qrErr := app.WriteQRFile(dir, lanURL+"?c="+cfg.Code)
 
 	quit := make(chan struct{})
 	var once bool
@@ -239,7 +239,7 @@ func banner(cfg *app.Config, port int, ips []string, qrErr error) {
 	fmt.Println()
 	fmt.Println("  手机扫码即可使用，无需安装 App：")
 	fmt.Println()
-	for _, line := range splitLines(app.QRASCII(url + "#c=" + cfg.Code)) {
+	for _, line := range splitLines(app.QRASCII(url + "?c=" + cfg.Code)) {
 		fmt.Println("  " + line)
 	}
 	fmt.Println()

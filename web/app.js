@@ -433,7 +433,8 @@
   /* ---------------- 启动 ---------------- */
 
   (async function boot() {
-    var m = /#c=(\d{6})/.exec(location.hash);
+    // ?c= 是标准查询串，所有扫码器都会保留；#c= 兼容老版本打印出来的码
+    var m = /[#?&]c=(\d{6})/.exec(location.search + location.hash);
     if (m) { await doPair(m[1]); return; }
 
     if (S.token) {

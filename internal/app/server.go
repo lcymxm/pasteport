@@ -509,7 +509,7 @@ func (a *App) handleQR(w http.ResponseWriter, r *http.Request) {
 	if idx < 0 || idx >= len(a.urls) {
 		idx = 0
 	}
-	target := a.urls[idx] + "#c=" + a.cfg.Code
+	target := a.urls[idx] + "?c=" + a.cfg.Code
 	png := QRPNG(target)
 	if png == nil {
 		writeErr(w, http.StatusInternalServerError, "二维码生成失败")
