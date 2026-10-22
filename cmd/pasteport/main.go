@@ -190,8 +190,11 @@ func main() {
 	defer stop()
 
 	go a.Clipboard().Run(ctx)
-	if _, err := app.StartDiscovery(actualPort, cfg.Name, nil); err != nil {
+	if _, err := app.StartDiscovery(actualPort, cfg.Name, func(format string, args ...any) {
+		fmt.Printf("  · "+format+"\n", args...)
+	}); err != nil {
 		fmt.Printf("  ⚠ 局域网自动发现未开启（UDP %d 被占用）：%v\n", app.DiscoverPort, err)
+		fmt.Println("    手机将无法自动搜到这台电脑，请在网页控制台里扫码或手动输入地址。")
 	}
 
 	srv := &http.Server{

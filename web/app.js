@@ -16,7 +16,10 @@
     urls: [],
     es: null,
     seen: Object.create(null),
-    got: 0
+    got: 0,
+    lastEvent: 0,     // 最后一次收到 SSE 消息的时间（看门狗用）
+    lastRefresh: 0,   // 最后一次拉取完整状态的时间
+    watchdog: null
   };
 
   /* ---------------- 工具 ---------------- */
@@ -142,6 +145,7 @@
 
   async function afterAuth() {
     var st;
+    S.lastRefresh = Date.now();
     try {
       st = await api('/api/state');
     } catch (e) {
@@ -202,6 +206,7 @@
     es.onmessage = function (e) {
       var ev;
       try { ev = JSON.parse(e.data); } catch (err) { return; }
+      S.lastEvent = Date.now();
       if (ev.type === 'hello') { setStatus('on', '已连接'); return; }
       handle(ev);
     };
@@ -209,9 +214,21 @@
     es.onerror = function () {
       setStatus('err', '重连中…');
     };
+
+    // 看门狗：Wi-Fi 切换、锁屏、路由器踢人之后，EventSource 有时会卡在
+    // CONNECTING 状态一声不响。超过 45 秒没收到任何东西就自己重连。
+    S.lastEvent = Date.now();
+    if (S.watchdog) clearInterval(S.watchdog);
+    S.watchdog = setInterval(function () {
+      if (!S.token) return;
+      if (Date.now() - S.lastEvent < 45000) return;
+      setStatus('err', '重新连接…');
+      connect();
+    }, 10000);
   }
 
   function handle(ev) {
+    if (ev.type === 'ping') return; // 心跳，只用来刷新「连接还活着」的时间戳
     if (ev.id && S.seen[ev.id]) return;
     if (ev.id) S.seen[ev.id] = 1;
 
@@ -426,9 +443,11 @@
 
   // 切回前台时如果连接断了，重连
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && S.token && (!S.es || S.es.readyState === 2)) {
-      afterAuth();
-    }
+    if (document.visibilityState !== 'visible' || !S.token) return;
+    // 手机锁屏回来之后，页面里的数据很可能已经过期了。
+    // 以前只在 readyState===2 时才重连，而卡在 CONNECTING 的情况下永远不会触发。
+    if (Date.now() - (S.lastRefresh || 0) < 1500) return;
+    afterAuth();
   });
 
   /* ---------------- 启动 ---------------- */

@@ -20,7 +20,7 @@ import (
 )
 
 // Version 会显示在网页页脚和 /api/info 里。
-const Version = "0.3.2"
+const Version = "0.3.3"
 
 // errNoStartupHook 表示当前环境没有注入开机自启实现。
 var errNoStartupHook = errors.New("开机自启不可用")
@@ -376,7 +376,10 @@ func (a *App) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			fl.Flush()
 		case <-tick.C:
-			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+			// 心跳必须是一条真正的数据事件：SSE 注释（": ping"）不会触发浏览器
+			// 的 onmessage，前端就没法据此判断「连接还活着」。
+			ping, _ := json.Marshal(Event{Type: "ping", At: time.Now()})
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", ping); err != nil {
 				return
 			}
 			fl.Flush()

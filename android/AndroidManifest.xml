@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.pasteport.app"
-    android:versionCode="5"
-    android:versionName="0.3.2">
+    android:versionCode="6"
+    android:versionName="0.3.3">
 
     <!-- 只需要网络权限：不走相机、不读通讯录、不申请存储 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 有些机器的 Wi-Fi 芯片默认丢弃组播/广播，拿个锁才收得到发现应答 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:allowBackup="false"

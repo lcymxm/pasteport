@@ -1,10 +1,12 @@
 package com.pasteport.app;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -225,13 +227,46 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final List<Discovery.Device> found = Discovery.scan(2200);
+                // 有些机器的 Wi-Fi 芯片默认丢弃组播/广播，拿个锁再扫
+                WifiManager.MulticastLock lock = null;
+                try {
+                    WifiManager wm = (WifiManager) getApplicationContext()
+                            .getSystemService(Context.WIFI_SERVICE);
+                    if (wm != null) {
+                        lock = wm.createMulticastLock("pasteport-discovery");
+                        lock.setReferenceCounted(false);
+                        lock.acquire();
+                    }
+                } catch (Exception ignored) {
+                    // 拿不到锁也继续，广播多半还是能收到的
+                }
+
+                List<Discovery.Device> found;
+                try {
+                    found = Discovery.scan(4000);
+                    // 广播被路由器挡住时，退回网段扫描（用户点按钮就是在明确要求「找找看」）
+                    if (found.isEmpty()) {
+                        ui.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                hint.setText("广播没回应，正在扫描本网段…");
+                            }
+                        });
+                        found = Discovery.sweepSubnet();
+                    }
+                } finally {
+                    if (lock != null) {
+                        try { lock.release(); } catch (Exception ignored) { }
+                    }
+                }
+
+                final List<Discovery.Device> result = found;
                 ui.post(new Runnable() {
                     @Override
                     public void run() {
                         scanning = false;
                         spinner.setVisibility(View.GONE);
-                        renderDevices(found);
+                        renderDevices(result);
                     }
                 });
             }

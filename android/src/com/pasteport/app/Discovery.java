@@ -1,22 +1,46 @@
 package com.pasteport.app;
 
+import android.util.Log;
+
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
- * 靠 UDP 广播找同一网段里的电脑。
- * 只负责「发现」，不做认证——真正的连接仍然要在网页里输入 6 位配对码。
+ * 找同一网段里的电脑。只负责「发现」，不做认证——连接仍然要在网页里输入配对码。
+ *
+ * 两条路，先广播后扫描：
+ *   1. UDP 广播问「谁在这儿」。除了 255.255.255.255 还会往**子网定向广播**
+ *      （比如 192.168.1.255）发，很多路由器和手机只在后者上放行。
+ *   2. 广播被彻底挡住时，对本地 /24 网段做一次 TCP 探测，
+ *      用 /api/info 确认对面确实是 PastePort。
  */
 public final class Discovery {
 
+    private static final String TAG = "PastePort";
     public static final int PORT = 45679;
     private static final String MAGIC = "PASTEPORT/1";
+
+    /** 电脑可能监听在这些端口上（默认 8787，被占用会往后挪）。 */
+    private static final int[] CANDIDATE_PORTS = {8787, 8788, 8789};
 
     public static final class Device {
         public final String name;
@@ -33,19 +57,24 @@ public final class Discovery {
     private Discovery() {
     }
 
-    /** 阻塞调用，请在子线程里跑。大约 timeoutMs 毫秒后返回找到的电脑。 */
+    /* ---------------- 广播发现 ---------------- */
+
+    /** 阻塞调用，请在子线程里跑。 */
     public static List<Device> scan(int timeoutMs) {
-        List<Device> found = new ArrayList<>();
+        Map<String, Device> found = new LinkedHashMap<>();
         DatagramSocket sock = null;
         try {
             sock = new DatagramSocket();
             sock.setBroadcast(true);
-            sock.setSoTimeout(350);
+            sock.setSoTimeout(250);
+
+            List<InetAddress> targets = broadcastTargets();
+            Log.i(TAG, "广播目标: " + targets);
 
             byte[] request = (MAGIC + " DISCOVER").getBytes("UTF-8");
-            DatagramPacket out = new DatagramPacket(request, request.length,
-                    InetAddress.getByName("255.255.255.255"), PORT);
-            sock.send(out);
+            int next = 0;
+            sendTo(sock, request, targets.get(next % targets.size()));
+            next++;
 
             long deadline = System.currentTimeMillis() + timeoutMs;
             byte[] buf = new byte[1024];
@@ -53,29 +82,164 @@ public final class Discovery {
                 try {
                     DatagramPacket in = new DatagramPacket(buf, buf.length);
                     sock.receive(in);
-                    Device d = parse(new String(in.getData(), 0, in.getLength(), "UTF-8"),
-                            in.getAddress().getHostAddress());
-                    if (d != null && !hasHost(found, d.host)) {
-                        found.add(d);
+                    String json = new String(in.getData(), 0, in.getLength(), "UTF-8");
+                    Device d = parse(json, in.getAddress().getHostAddress());
+                    if (d != null) {
+                        String key = d.host + ":" + d.port;
+                        if (!found.containsKey(key)) {
+                            Log.i(TAG, "发现电脑 " + d.name + " @ " + key);
+                            found.put(key, d);
+                        }
                     }
                 } catch (SocketTimeoutException te) {
-                    sock.send(out); // 没回音就再喊一嗓子
+                    // 轮流往不同目标再喊一次：有限广播和定向广播各发几轮
+                    sendTo(sock, request, targets.get(next % targets.size()));
+                    next++;
                 }
             }
-        } catch (Exception ignored) {
-            // 广播被路由器挡住时只能靠手动输入地址
+        } catch (Exception e) {
+            Log.w(TAG, "广播发现失败: " + e);
         } finally {
             if (sock != null) sock.close();
         }
-        return found;
+        return new ArrayList<>(found.values());
     }
 
-    private static boolean hasHost(List<Device> list, String host) {
-        for (Device d : list) {
-            if (d.host.equals(host)) return true;
+    private static void sendTo(DatagramSocket sock, byte[] payload, InetAddress target) {
+        try {
+            sock.send(new DatagramPacket(payload, payload.length, target, PORT));
+        } catch (Exception ignored) {
+            // 某个目标不可用就算了，别的目标还在
         }
-        return false;
     }
+
+    /**
+     * 有限广播 + 所有网卡上的子网定向广播。
+     * 定向广播是关键：不少路由器只转发它，不转发 255.255.255.255。
+     */
+    private static List<InetAddress> broadcastTargets() {
+        List<InetAddress> out = new ArrayList<>();
+        try {
+            out.add(InetAddress.getByName("255.255.255.255"));
+        } catch (Exception ignored) {
+        }
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    InetAddress b = ia.getBroadcast();
+                    if (b != null && !out.contains(b)) out.add(b);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    /* ---------------- 网段扫描兜底 ---------------- */
+
+    /**
+     * 广播被挡住时用：对本地 /24 逐台探测常见端口，再用 /api/info 确认。
+     * 只有用户主动点「重新搜索」时才会走到这里。
+     */
+    public static List<Device> sweepSubnet() {
+        List<Device> found = new ArrayList<>();
+        String prefix = null;
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    InetAddress ip = ia.getAddress();
+                    if (ip == null) continue;
+                    byte[] raw = ip.getAddress();
+                    if (raw.length != 4) continue;
+                    int prefixLen = ia.getNetworkPrefixLength();
+                    if (prefixLen < 24) continue;   // 网段太大就不扫了
+                    prefix = (raw[0] & 0xFF) + "." + (raw[1] & 0xFF) + "." + (raw[2] & 0xFF);
+                    break;
+                }
+                if (prefix != null) break;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "拿不到本地网段: " + e);
+            return found;
+        }
+        if (prefix == null) return found;
+
+        Log.i(TAG, "开始扫描网段 " + prefix + ".0/24");
+        ExecutorService pool = Executors.newFixedThreadPool(48);
+        for (int host = 1; host <= 254; host++) {
+            final String ip = prefix + "." + host;
+            pool.submit(new Runnable() {
+                @Override
+                public void run() {
+                    for (int port : CANDIDATE_PORTS) {
+                        if (probe(ip, port)) {
+                            synchronized (found) {
+                                found.add(new Device("电脑", ip, port));
+                            }
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+        pool.shutdown();
+        try {
+            pool.awaitTermination(12, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        // 用 /api/info 里的名字补齐（只对命中的少数几台发请求）
+        List<Device> named = new ArrayList<>();
+        synchronized (found) {
+            for (Device d : found) {
+                String name = fetchName(d.host, d.port);
+                named.add(new Device(name != null ? name : d.name, d.host, d.port));
+            }
+        }
+        Log.i(TAG, "网段扫描结束，命中 " + named.size() + " 台");
+        return named;
+    }
+
+    /** 端口能不能连上。 */
+    private static boolean probe(String host, int port) {
+        Socket s = new Socket();
+        try {
+            s.connect(new java.net.InetSocketAddress(host, port), 250);
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { s.close(); } catch (Exception ignored) { }
+        }
+    }
+
+    /** 连上之后再确认一次「对面是不是 PastePort」，避免把别的服务当电脑。 */
+    private static String fetchName(String host, int port) {
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL("http://" + host + ":" + port + "/api/info");
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(800);
+            c.setReadTimeout(800);
+            if (c.getResponseCode() != 200) return null;
+            StringBuilder sb = new StringBuilder();
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"));
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            JSONObject o = new JSONObject(sb.toString());
+            if (!o.optBoolean("pair", false)) return null;   // 不是 PastePort
+            return o.optString("name", "电脑");
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    /* ---------------- 解析 ---------------- */
 
     private static Device parse(String json, String fallbackHost) {
         try {
