@@ -141,39 +141,32 @@ public final class Discovery {
     /**
      * 广播被挡住时用：对本地 /24 逐台探测常见端口，再用 /api/info 确认。
      * 只有用户主动点「重新搜索」时才会走到这里。
+     *
+     * @param extraPort 上次连过的端口（电脑可能不在默认端口上），0 表示没有
      */
-    public static List<Device> sweepSubnet() {
+    public static List<Device> sweepSubnet(int extraPort) {
         List<Device> found = new ArrayList<>();
-        String prefix = null;
-        try {
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!ni.isUp() || ni.isLoopback()) continue;
-                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
-                    InetAddress ip = ia.getAddress();
-                    if (ip == null) continue;
-                    byte[] raw = ip.getAddress();
-                    if (raw.length != 4) continue;
-                    int prefixLen = ia.getNetworkPrefixLength();
-                    if (prefixLen < 24) continue;   // 网段太大就不扫了
-                    prefix = (raw[0] & 0xFF) + "." + (raw[1] & 0xFF) + "." + (raw[2] & 0xFF);
-                    break;
-                }
-                if (prefix != null) break;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "拿不到本地网段: " + e);
+        String prefix = pickPrefix();
+        if (prefix == null) {
+            Log.w(TAG, "找不到可用于扫描的私有网段");
             return found;
         }
-        if (prefix == null) return found;
 
-        Log.i(TAG, "开始扫描网段 " + prefix + ".0/24");
+        // 端口去重，上次用过的排最前面
+        List<Integer> ports = new ArrayList<>();
+        if (extraPort > 0) ports.add(extraPort);
+        for (int p : CANDIDATE_PORTS) {
+            if (!ports.contains(p)) ports.add(p);
+        }
+        Log.i(TAG, "开始扫描网段 " + prefix + ".0/24，端口 " + ports);
+
         ExecutorService pool = Executors.newFixedThreadPool(48);
         for (int host = 1; host <= 254; host++) {
             final String ip = prefix + "." + host;
             pool.submit(new Runnable() {
                 @Override
                 public void run() {
-                    for (int port : CANDIDATE_PORTS) {
+                    for (int port : ports) {
                         if (probe(ip, port)) {
                             synchronized (found) {
                                 found.add(new Device("电脑", ip, port));
@@ -186,10 +179,11 @@ public final class Discovery {
         }
         pool.shutdown();
         try {
-            pool.awaitTermination(12, TimeUnit.SECONDS);
+            pool.awaitTermination(15, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
+
         // 用 /api/info 里的名字补齐（只对命中的少数几台发请求）
         List<Device> named = new ArrayList<>();
         synchronized (found) {
@@ -200,6 +194,46 @@ public final class Discovery {
         }
         Log.i(TAG, "网段扫描结束，命中 " + named.size() + " 台");
         return named;
+    }
+
+    /**
+     * 从私有地址网卡里取出前三段。优先 Wi-Fi，避免把 VPN / 蜂窝网络的网段当成本地网段。
+     * 不要求掩码是 /24 —— 公司网常见 /16 甚至 /8，扫它所在的 /24 就够用了。
+     */
+    private static String pickPrefix() {
+        String wifi = null;
+        String fallback = null;
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String niName = ni.getName() == null ? "" : ni.getName().toLowerCase();
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    InetAddress ip = ia.getAddress();
+                    if (ip == null) continue;
+                    byte[] raw = ip.getAddress();
+                    if (raw.length != 4 || !isPrivate(raw)) continue;
+                    String p = (raw[0] & 0xFF) + "." + (raw[1] & 0xFF) + "." + (raw[2] & 0xFF);
+                    boolean looksWifi = niName.startsWith("wlan") || niName.contains("wifi")
+                            || niName.startsWith("ap") || niName.contains("rmnet");
+                    if (looksWifi) {
+                        wifi = p;
+                    } else if (fallback == null) {
+                        fallback = p;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "枚举网卡失败: " + e);
+        }
+        return wifi != null ? wifi : fallback;
+    }
+
+    /** 10/8、172.16/12、192.168/16 才算局域网。 */
+    private static boolean isPrivate(byte[] a) {
+        int b0 = a[0] & 0xFF, b1 = a[1] & 0xFF;
+        if (b0 == 10) return true;
+        if (b0 == 192 && b1 == 168) return true;
+        return b0 == 172 && b1 >= 16 && b1 <= 31;
     }
 
     /** 端口能不能连上。 */

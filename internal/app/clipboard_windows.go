@@ -142,6 +142,7 @@ type ClipboardWatcher struct {
 
 	mu        sync.Mutex
 	lastSeq   uint32
+	readRetry int
 	lastText  string
 	lastImage string
 	onImage   func([]byte)
@@ -194,13 +195,35 @@ func (w *ClipboardWatcher) Run(ctx context.Context) {
 		seq := clipboardSeq()
 		w.mu.Lock()
 		changed := seq != w.lastSeq
-		w.lastSeq = seq
 		w.mu.Unlock()
 		if !changed {
 			continue
 		}
+
 		text, err := GetClipboardText()
-		if err != nil || strings.TrimSpace(text) == "" || len(text) > maxClipBytes {
+		if err != nil {
+			// 剪贴板正被别的程序占用（Excel、部分编辑器会短暂锁住）。
+			// 这时候**不能**把 lastSeq 记下来，否则这次复制就永久丢了。
+			// 保留 lastSeq，下一轮再读；连续读不到再放弃，免得空转。
+			w.mu.Lock()
+			w.readRetry++
+			give := w.readRetry > 6
+			w.mu.Unlock()
+			if give {
+				w.mu.Lock()
+				w.lastSeq = seq
+				w.readRetry = 0
+				w.mu.Unlock()
+			}
+			continue
+		}
+
+		w.mu.Lock()
+		w.lastSeq = seq
+		w.readRetry = 0
+		w.mu.Unlock()
+
+		if strings.TrimSpace(text) == "" || len(text) > maxClipBytes {
 			// 不是文字，就看看是不是图片（截图、复制的图像）
 			w.tryImage()
 			continue

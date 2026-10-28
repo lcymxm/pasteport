@@ -252,7 +252,7 @@ public class MainActivity extends Activity {
                                 hint.setText("广播没回应，正在扫描本网段…");
                             }
                         });
-                        found = Discovery.sweepSubnet();
+                        found = Discovery.sweepSubnet(lastPort());
                     }
                 } finally {
                     if (lock != null) {
@@ -301,6 +301,21 @@ public class MainActivity extends Activity {
     }
 
     /* ---------------- 网页 ---------------- */
+
+    /**
+     * 上次连过的端口。电脑的默认端口被占用时会顺延，所以网段扫描也要试一下它。
+     * 解析失败返回 0。
+     */
+    private int lastPort() {
+        String url = Prefs.url(this);
+        if (url == null) return 0;
+        try {
+            int port = new java.net.URL(url).getPort();
+            return port > 0 ? port : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 
     private void openWeb(String url) {
         if (web == null) {

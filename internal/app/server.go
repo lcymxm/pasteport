@@ -20,7 +20,7 @@ import (
 )
 
 // Version 会显示在网页页脚和 /api/info 里。
-const Version = "0.3.3"
+const Version = "0.3.4"
 
 // errNoStartupHook 表示当前环境没有注入开机自启实现。
 var errNoStartupHook = errors.New("开机自启不可用")
